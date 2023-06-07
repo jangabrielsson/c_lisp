@@ -1,4 +1,6 @@
-typedef void *TokenizerPtr;
+typedef struct TokenizerStruct {
+    int (*nextToken)(char** buffer, struct TokenizerStruct *tokenizer);
+} *TokenizerPtr;
 
 int nextToken(char **token, TokenizerPtr tkz);
 

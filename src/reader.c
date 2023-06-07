@@ -5,6 +5,14 @@
 #include "tokenizer.h"
 #include "types.h"
 
+typedef struct Parser {
+    TokenizerPtr tokenizer;
+    char *lastToken;
+    int lastTokenType;
+    Ptr (*parse)(struct Parser *parser);
+    Ptr (*next)(struct Parser *parser);
+} Parser, *ParserPtr;
+
 void testReader(void)
 {
     printf("Lisp>");
@@ -12,16 +20,23 @@ void testReader(void)
     TokenizerPtr tokenizer = createStringTokenizer("(+ 1 2 3)");
     while (1) {
         char *token;
-        int tokenType = nextToken(&token, tokenizer);
+        int tokenType = tokenizer->nextToken(&token, tokenizer);
         if (tokenType == 0) break; // EOF
         printf("b %d %s\n",tokenType,token);
     }
 }
 
-Ptr parse(tokenFun)
+// Ptr(ParserPtr parser)
+// {
+//     char *token;
+//     int tokenType = nextToken(&token,parser->tokenizer);
+//     return tokenType;
+// }
+
+Ptr parse(ParserPtr parser)
 {   
     char *token;
-    int tokenType = tokenFun->next(&token);
+    int tokenType = parser->next(&token);
     switch(tokenType) {
         case 0: 
             return NIL; // ERRROR
@@ -90,8 +105,13 @@ Ptr parse(tokenFun)
     }
 }
 
-
-Ptr reads(TokenizerPtr ptr)
+ParserPtr createParser(TokenizerPtr tokenizer)
 {
-    return NIL;
+    ParserPtr parser = malloc(sizeof(Parser));
+    parser->tokenizer = tokenizer;
+    parser->lastToken = NULL;
+    parser->lastTokenType = 0;
+    parser->parse = parse;
+    parser->next = tokenizer->nextToken;
+    return parser;
 }
