@@ -13,8 +13,8 @@ extern int yylex(void);
 extern char lexBuffer[];
 
 typedef struct TokenizerStruct {
-    int (*nextToken)(char** buffer, struct TokenizerStruct *tokenizer);
-    int (*readInput)(char* buffer, int maxBytesToRead, struct TokenizerStruct *currTokenizer);
+    int (*nextToken)(struct TokenizerStruct *tokenizer, char** buffer);
+    int (*readInput)(struct TokenizerStruct *currTokenizer, char* buffer, int maxBytesToRead);
     YY_BUFFER_STATE buffer;
     int closed;
     FILE *fptr;
@@ -22,74 +22,77 @@ typedef struct TokenizerStruct {
     int n;
 } Tokenizer, *TokenizerPtr;
 
-int (*readHook)(char* buffer, int maxBytesToRead, TokenizerPtr currTokenizer);
+int (*readHook)(TokenizerPtr self, char* buffer, int maxBytesToRead);
 
 TokenizerPtr currTokenizer;
 
 int readInputForLexer(char* buffer, size_t *numBytesRead, int maxBytesToRead)
 {
-    *numBytesRead = readHook(buffer,maxBytesToRead,currTokenizer);
+    *numBytesRead = readHook(currTokenizer,buffer,maxBytesToRead);
     return 0;
 }
 
-int stringReadHook(char* buffer, int maxBytesToRead, TokenizerPtr currTokenizer)  
+static int stringReadHook(TokenizerPtr self, char* buffer, int maxBytesToRead)  
 {
     int i = 0;
-    char *str = currTokenizer->str;
-    str = str+currTokenizer->n;
+    char *str = self->str;
+    str = str+self->n;
     while (*str && i < maxBytesToRead) {
         buffer[i++] = *str++;
     }
-    if (buffer[0] == 0L) currTokenizer->closed = 1;
-    currTokenizer->n += i;
+    if (buffer[0] == 0L) self->closed = 1;
+    self->n += i;
     return i;
 }
 
-int stdinReadHook(char* buffer,int maxBytesToRead,TokenizerPtr currTokenizer)  
+static int stdinReadHook(TokenizerPtr self, char* buffer,int maxBytesToRead)  
 {
     *buffer = fgetc(stdin);
     return 1;
 }
 
-int fileReadHook(char* buffer, int maxBytesToRead, TokenizerPtr currTokenizer)
+static int fileReadHook(TokenizerPtr self, char* buffer, int maxBytesToRead)
 {
-    if (currTokenizer->fptr == 0) return 0;
-    char *res = fgets(buffer, maxBytesToRead, currTokenizer->fptr);
+    if (self->fptr == 0) return 0;
+    char *res = fgets(buffer, maxBytesToRead, self->fptr);
     if (res == NULL) {
-        fclose(currTokenizer->fptr); 
-        currTokenizer->closed=1; 
-        currTokenizer->fptr=0; 
+        fclose(self->fptr); 
+        self->closed=1; 
+        self->fptr=0; 
         return 0;
     }
     return strlen(buffer);
 }
 
-static int nextToken(char **token, TokenizerPtr tkz) // When last token is read the tkz ptr is deallocated(!!!)
+void tokenizer_dispose(TokenizerPtr self)
 {
-    if (tkz->closed) return 0;
-    readHook = tkz->readInput;
-    yy_switch_to_buffer(tkz->buffer);
-    currTokenizer = tkz;
+    if (self->closed) return;
+    self->closed = 1;
+    yy_delete_buffer(self->buffer);
+    free(self);
+}
+
+static int nextToken(TokenizerPtr self, char **token) // When last token is read the tkz ptr is deallocated(!!!)
+{
+    if (self->closed) return 0;
+    readHook = self->readInput;
+    yy_switch_to_buffer(self->buffer);
+    currTokenizer = self;
     int y = yylex();
-    if (y == 0L) {
-        tkz->closed = 1;
-        yy_delete_buffer(tkz->buffer);
-        free(tkz);
-    }
     *token = lexBuffer;
     return y;
 }
 
-Tokenizer *createStdinTokenizer(void)
+TokenizerPtr tokenizer_stdin(void)
 {
-    Tokenizer *tkz = malloc(sizeof(Tokenizer));
+    TokenizerPtr tkz = malloc(sizeof(Tokenizer));
     tkz->nextToken = nextToken;
     tkz->readInput = stdinReadHook;
     tkz->buffer = yy_create_buffer(0, 8192);
     return tkz;
 }
 
-Tokenizer *createFileTokenizer(char *fname)
+TokenizerPtr tokenizer_file(char *fname)
 {
     FILE *fptr = fopen(fname, "r");
     if (fptr == 0L) return 0L;
@@ -102,9 +105,9 @@ Tokenizer *createFileTokenizer(char *fname)
     return tkz;
 }
 
-Tokenizer *createStringTokenizer(char *str)
+TokenizerPtr tokenizer_string(char *str)
 {
-    Tokenizer *tkz = malloc(sizeof(Tokenizer));
+    TokenizerPtr tkz = malloc(sizeof(Tokenizer));
     tkz->nextToken = nextToken;
     tkz->readInput = stringReadHook;
     tkz->buffer = yy_create_buffer(0, 8192);

@@ -5,7 +5,7 @@ union Expr;
 typedef union Expr Expr;
 typedef Expr *Ptr;
 
-void print(Ptr p);
+void lisp_print(Ptr p);
 
 struct Atom {
     char *name;

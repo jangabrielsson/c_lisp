@@ -2,14 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <glib.h> // g_hash_table
-#include <setjmp.h>
 #include "types.h"
+#include "tokenizer.h"
 #include "reader.h"
+#include "vm.h"
 
 Ptr *heapStart;
 Ptr *heapEnd;
 unsigned int heapPtr;
-
 
 void allocBlock(void)
 {
@@ -73,7 +73,7 @@ Ptr defineBuiltin(char *name, ulong nargs, Ptr (*fun)(Ptr *))
 
 Ptr _print(Ptr *stack)
 {
-  print(stack[0]);
+  lisp_print(stack[0]);
   return stack[0];
 }
 
@@ -85,7 +85,7 @@ void init(void)
   defineBuiltin("PRINT", 1, &_print);
 }
 
-void print(Ptr e)
+void lisp_print(Ptr e)
 {
   if (TYPE(e) == ATOM_TYPE)
   {
@@ -93,162 +93,15 @@ void print(Ptr e)
   }
   else if (TYPE(e) == CONS_TYPE)
   {
-    print(UNTAG(e)->cons.car);
+    lisp_print(UNTAG(e)->cons.car);
     printf(" . ");
-    print(UNTAG(e)->cons.cdr);
+    lisp_print(UNTAG(e)->cons.cdr);
   }
   else if (TYPE(e) == INT_TYPE)
   {
     printf("%ld", (long)e >> 2);
   }
 }
-
-enum OP
-{
-  OP_POP,
-  OP_PUSH,
-  OP_ADD,
-  OP_SUB,
-  OP_CONS,
-  OP_CAR,
-  OP_CDR,
-  OP_CALL,
-  OP_EXIT
-};
-
-struct Instr
-{
-  uint op;
-  union
-  {
-    Ptr value;
-    Ptr ptr;
-    long num;
-  };
-};
-typedef struct Instr Instr;
-
-#define PUSH(V) stack[++stackPtr] = V
-#define POP() (stack[stackPtr--])
-#define CHECK_TYPE(P, T, M) ((((ulong)P) & (ulong)0x03) == (ulong)T) ? UNTAG(P) : (Ptr)lerror(M)
-#define CHECK_INT(P, M) ((((ulong)P) & (ulong)0x03) == (ulong)INT_TYPE) ? (((long)P) >> 2) : (long)lerror(M)
-
-jmp_buf ex_buf__;
-Ptr lerror(char *m)
-{
-  printf("%s", m);
-  longjmp(ex_buf__, 42);
-  return NIL;
-}
-
-char *ERRSTRINGS[] = {
-    "ADD expected number as first argument",
-    "ADD expected number as second argument",
-};
-
-enum
-{
-  ERR_CAR = 0,
-  ERR_CDR,
-};
-
-Ptr runCode(Instr *code)
-{
-  int p = 0;
-  int stackPtr = -1;
-  Ptr stack[200];
-  char *ERR = 0;
-
-  int err = setjmp(ex_buf__);
-  if (err != 0)
-  {
-    printf("ERR");
-    return NIL;
-  }
-
-  while (code[p].op != OP_EXIT && ERR == 0)
-  {
-    switch (code[p].op)
-    {
-    case OP_PUSH:
-      PUSH(code[p].value);
-      break;
-    case OP_POP:
-      POP();
-      break;
-    case OP_ADD:
-    {
-      long x = (long)POP();
-      x = CHECK_INT(x, "ADD expected number as first argument");
-      long y = (long)POP();
-      y = CHECK_INT(y, "ADD expected number as second argument");
-      PUSH(INT2PTR(x + y));
-      break;
-    }
-    case OP_SUB:
-    {
-      long x = (long)POP();
-      x = CHECK_INT(x, "SUB expected number as first argument");
-      long y = (long)POP();
-      y = CHECK_INT(y, "SUB expected number as second argument");
-      PUSH(INT2PTR(x - y));
-      break;
-    }
-    case OP_CONS:
-    {
-      Ptr a = POP();
-      Ptr b = POP();
-      PUSH(mkCons(b, a));
-      break;
-    }
-    case OP_CAR:
-    {
-      Ptr e = POP();
-      e = CHECK_TYPE(e, CONS_TYPE, "car of non-cons");
-      PUSH(e->cons.car);
-      break;
-    }
-    case OP_CDR:
-    {
-      Ptr e = POP();
-      e = CHECK_TYPE(e, CONS_TYPE, "cdr of non-cons");
-      PUSH(e->cons.cdr);
-      break;
-    }
-    case OP_CALL:
-    {
-      Ptr ptr = UNTAG(code[p].value);
-      ptr = UNTAG(ptr->atom.value);
-      // Check that we have args
-      stackPtr -= ptr->builtin.nargs;
-      PUSH(ptr->builtin.fun(stack));
-    }
-    break;
-    case OP_EXIT:
-      p--;
-      break;
-    }
-    p++;
-  }
-  return POP();
-}
-
-#define PUSHINT(I)                     \
-  {                                    \
-    .op = OP_PUSH, .value = INT2PTR(I) \
-  }
-#define ADD()    \
-  {              \
-    .op = OP_ADD \
-  }
-#define EXIT()    \
-  {               \
-    .op = OP_EXIT \
-  }
-#define CALL(F)                       \
-  {                                   \
-    .op = OP_CALL, .value = intern(F) \
-  }
 
 int main(void)
 {
@@ -267,11 +120,11 @@ int main(void)
   printf("Ptr %lu, Long %lu\n", sizeof(Ptr), sizeof(a));
   printf("%lx\n", ((ulong)NIL));
   printf("%lx\n", ((ulong)NIL) & (ulong)0x03);
-  print(NIL);
+  lisp_print(NIL);
   printf("\n");
 
   Ptr l = mkCons(INT2PTR(3), mkCons(INT2PTR(4), mkCons(INT2PTR(5), NIL)));
-  print(l);
+  lisp_print(l);
   printf("\n");
 
   Instr code[] = {

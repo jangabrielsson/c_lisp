@@ -1,42 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "y.tab.h"
-#include "tokenizer.h"
 #include "types.h"
+#include "tokenizer.h"
+#include "reader.h"
 
-typedef struct Parser {
-    TokenizerPtr tokenizer;
-    char *lastToken;
-    int lastTokenType;
-    Ptr (*parse)(struct Parser *parser);
-    Ptr (*next)(struct Parser *parser);
-} Parser, *ParserPtr;
-
-void testReader(void)
-{
-    printf("Lisp>");
-
-    TokenizerPtr tokenizer = createStringTokenizer("(+ 1 2 3)");
-    while (1) {
-        char *token;
-        int tokenType = tokenizer->nextToken(&token, tokenizer);
-        if (tokenType == 0) break; // EOF
-        printf("b %d %s\n",tokenType,token);
-    }
-}
-
-// Ptr(ParserPtr parser)
-// {
-//     char *token;
-//     int tokenType = nextToken(&token,parser->tokenizer);
-//     return tokenType;
-// }
-
-Ptr parse(ParserPtr parser)
+Ptr parse(ParserPtr self)
 {   
     char *token;
-    int tokenType = parser->next(&token);
+    int tokenType = self->next(self, &token);
     switch(tokenType) {
         case 0: 
             return NIL; // ERRROR
@@ -65,7 +39,47 @@ Ptr parse(ParserPtr parser)
         case tRBRACK:   
             return NIL; // EOF
         case tLBRACE:   
-            return NIL; // EOF
+            if (self->next(self, &token) == tRBRACE) {
+                return NIL; // EOF
+            } else {
+                self->pushBack(self);
+                Ptr l = mkCons(self->parse(self), NIL);
+                while (1) {
+                    int tk = self->next(self,&token);
+                    if (tk == tRBRACE) {
+                        return l
+                    } elseif (tk == 'TT_DOT') {
+                        t.cdr = p:parse(st)
+                        if st:nextToken() ~= 'TT_RPAR' then
+                            Exception.Reader("Missing ')'", st:lineNo())
+                        else
+                            return l
+                        end
+                    } elseif (tk == 'TT_EOF') {
+                        Exception.Reader("Malformed list!", st:lineNo())
+                    } else
+                        self->pushBack();
+                        t.cdr = Cons(p:parse(st), Lisp.NIL);
+                        t = t.cdr
+                        -- break
+                    }
+          t.cdr = p:parse(st)
+          if st:nextToken() ~= 'TT_RPAR' then
+            Exception.Reader("Missing ')'", st:lineNo())
+          else
+            return l
+          end
+        elseif tk == 'TT_EOF' then
+          Exception.Reader("Malformed list!", st:lineNo())
+        else
+          st:pushBack();
+          t.cdr = Cons(p:parse(st), Lisp.NIL);
+          t = t.cdr
+          -- break
+        end
+      end
+    end
+  end,
         case tRBRACE:   
             return NIL; // EOF
         case tFUNCTION: 
@@ -105,13 +119,32 @@ Ptr parse(ParserPtr parser)
     }
 }
 
+static int readToken(ParserPtr parser, char** token)
+{
+    return parser->tokenizer->nextToken(parser->tokenizer, token);
+}
+
 ParserPtr createParser(TokenizerPtr tokenizer)
 {
     ParserPtr parser = malloc(sizeof(Parser));
     parser->tokenizer = tokenizer;
     parser->lastToken = NULL;
     parser->lastTokenType = 0;
-    parser->parse = parse;
-    parser->next = tokenizer->nextToken;
+    parser->read = parse;
+    parser->next = readToken;
     return parser;
+}
+
+void testReader(void)
+{
+    printf("Lisp>");
+
+    char str[] = "42";
+    TokenizerPtr tokenizer = tokenizer_string(str);
+    ParserPtr parser = createParser(tokenizer);
+
+    Ptr p = parser->read(parser);
+    printf("read: %s -> ", str);
+    lisp_print(p);
+    printf("\n");
 }
