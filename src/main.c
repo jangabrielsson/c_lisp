@@ -10,6 +10,7 @@ Ptr *heapStart;
 Ptr *heapEnd;
 unsigned int heapPtr;
 
+
 void allocBlock(void)
 {
   Ptr *block = (Ptr *)malloc(BLOCK_SIZE);
@@ -42,8 +43,6 @@ Ptr mkCons(Ptr car, Ptr cdr)
   return (Ptr)TAG(c, CONS_TYPE);
 }
 
-Ptr NIL;
-Ptr T;
 GHashTable *hash;
 
 Ptr mkAtom(char *name, Ptr value)
@@ -153,7 +152,7 @@ enum
   ERR_CDR,
 };
 
-runCode(Instr *code)
+Ptr runCode(Instr *code)
 {
   int p = 0;
   int stackPtr = -1;

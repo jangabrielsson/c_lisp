@@ -47,3 +47,6 @@ union Expr {
 
 Ptr mkCons(Ptr car, Ptr cdr);
 Ptr mkAtom(char *name, Ptr value);
+
+Ptr NIL;
+Ptr T;

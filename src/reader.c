@@ -18,31 +18,6 @@ void testReader(void)
     }
 }
 
-Ptr readExpr(TokenizerPtr tkz) {
-function Lisp.Reader(str)
-  local st = Tokenizer(str) 
-  local self = { st = st, line = 1 }
-  local function parse(st) -- -> Expr
-    local pf = parseFuns[st:nextToken()] or parseFuns['TT_DEFAULT']
-    return pf(st,self)
-  end
-  function self:parse()
-    local stat,res = pcall(function()
-        if st:nextToken() == 'TT_EOF' then
-          return Lisp.EOF
-        else 
-          st:pushBack()
-          return parse(st)
-        end
-      end)
-    if not stat then
-      error(res)
-    else return res end
-  end
-  return self
-end
-}
-
 Ptr parse(tokenFun)
 {   
     char *token;
@@ -51,9 +26,11 @@ Ptr parse(tokenFun)
         case 0: 
             return NIL; // ERRROR
         case tINTEGER: 
+        {
             long n;
             sscanf(token, "%ld", &n);
             return INT2PTR(n); // EOF
+        }
         case tSTRING: 
             return NIL; // EOF
         case tATOM: 
@@ -111,64 +88,10 @@ Ptr parse(tokenFun)
         default:    
             return NIL; // EOF
     }
-  TT_STRING = function(st) return st.val end,
-  TT_ATOM   = function(st) return Atom(st.val):intern() end,
-  TT_QUOTE  = function(st,p) return Cons(Lisp.QUOTE, Cons(p:parse(st), Lisp.NIL)) end,
-  TT_HASH   = function(st,p) -- Hack
-    local Expr e = p:parse(st).cdr.car
-    if e:isAtom() then e = Cons(Lisp.QUOTE, Cons(e, Lisp.NIL)) end
-    return Cons(Lisp.FUNCTION, Cons(e, Lisp.NIL))
-  end,
-  TT_BACKQUOTE = function(st,p) return Cons(Atom("BACKQUOTE"):intern(),Cons(p:parse(st),Lisp.NIL)) end,
-  TT_COMMA     = function(st,p) 
-    local n = st:nextToken();
-    if n == 'TT_DOT' then
-      return  Cons(Lisp['*BACK-COMMA-DOT*'],Cons(p:parse(st),Lisp.NIL))
-    elseif n == 'TT_AT' then
-      return Cons(Lisp['*BACK-COMMA-AT*'],Cons(p:parse(st),Lisp.NIL))
-    else 
-      st:pushBack();
-      return Cons(Lisp['*BACK-COMMA*'],Cons(p:parse(st),Lisp.NIL))
-    end
-  end,
-  TT_LPAR   = function(st,p) 
-    if st:nextToken() == 'TT_RPAR' then
-      return Lisp.NIL
-    else 
-      st:pushBack();
-      local l = Cons(p:parse(st), Lisp.NIL);
-      local t = l;
-      while true do
-        local tk = st:nextToken()
-        if tk == 'TT_RPAR' then
-          return l
-        elseif tk == 'TT_DOT' then
-          t.cdr = p:parse(st)
-          if st:nextToken() ~= 'TT_RPAR' then
-            Exception.Reader("Missing ')'", st:lineNo())
-          else
-            return l
-          end
-        elseif tk == 'TT_EOF' then
-          Exception.Reader("Malformed list!", st:lineNo())
-        else
-          st:pushBack();
-          t.cdr = Cons(p:parse(st), Lisp.NIL);
-          t = t.cdr
-          -- break
-        end
-      end
-    end
-  end,
-  TT_UNKNOWN = function(st) 
-    Lisp:log(0,"Reader TT_UNKNOWN: %s",st.val)
-    return Atom(st.val):intern()
-  end,
-  TT_ERROR = function(st) 
-    Lisp:log(0,"Reader TT_ERROR: %s",st.val);
-    Exception.Reader("Missing ')'", st:lineNo())
-  end,
-  TT_DEFAULT = function(st) 
-    return Atom(st.val):intern()
-  end
+}
+
+
+Ptr reads(TokenizerPtr ptr)
+{
+    return NIL;
 }
