@@ -1,145 +1,107 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <setjmp.h>
 
 #include "y.tab.h"
 #include "types.h"
 #include "tokenizer.h"
 #include "reader.h"
 
-Ptr parse(ParserPtr self)
-{   
+#define tEOF 0
+
+static jmp_buf ex_buf__;
+static Ptr lerror(char *m) {
+  printf("%s", m);
+  longjmp(ex_buf__, 42);
+  return NIL;
+}
+
+static Ptr parse(ParserPtr self) {   
     char *token;
-    int tokenType = self->next(self, &token);
+    int tokenType = self->nextToken(self, &token);
     switch(tokenType) {
         case 0: 
             return NIL; // ERRROR
-        case tINTEGER: 
-        {
+        case tINTEGER: {
             long n;
             sscanf(token, "%ld", &n);
-            return INT2PTR(n); // EOF
+            return INT2PTR(n); 
         }
-        case tSTRING: 
-            return NIL; // EOF
         case tATOM: 
             return mkAtom(token, NIL);
-        case tQUOTE: 
-            return NIL; // EOF
-        case tBACK_QUOTE:
-            return NIL; // EOF
-        case tCOMMA:
-            return NIL; // EOF
-        case tCOM_DOT:  
-            return NIL; // EOF
-        case tCOM_AT:   
-            return NIL; // EOF
-        case tLBRACK:   
-            return NIL; // EOF
-        case tRBRACK:   
-            return NIL; // EOF
         case tLBRACE:   
-            if (self->next(self, &token) == tRBRACE) {
-                return NIL; // EOF
+            if (self->nextToken(self, &token) == tRBRACE) {
+                return NIL; 
             } else {
                 self->pushBack(self);
-                Ptr l = mkCons(self->parse(self), NIL);
+                Ptr l = mkCons(parse(self), NIL);
+                Ptr t = l;
                 while (1) {
-                    int tk = self->next(self,&token);
+                    int tk = self->nextToken(self,&token);
                     if (tk == tRBRACE) {
-                        return l
-                    } elseif (tk == 'TT_DOT') {
-                        t.cdr = p:parse(st)
-                        if st:nextToken() ~= 'TT_RPAR' then
-                            Exception.Reader("Missing ')'", st:lineNo())
-                        else
-                            return l
-                        end
-                    } elseif (tk == 'TT_EOF') {
-                        Exception.Reader("Malformed list!", st:lineNo())
-                    } else
-                        self->pushBack();
-                        t.cdr = Cons(p:parse(st), Lisp.NIL);
-                        t = t.cdr
-                        -- break
-                    }
-          t.cdr = p:parse(st)
-          if st:nextToken() ~= 'TT_RPAR' then
-            Exception.Reader("Missing ')'", st:lineNo())
-          else
-            return l
-          end
-        elseif tk == 'TT_EOF' then
-          Exception.Reader("Malformed list!", st:lineNo())
-        else
-          st:pushBack();
-          t.cdr = Cons(p:parse(st), Lisp.NIL);
-          t = t.cdr
-          -- break
-        end
-      end
-    end
-  end,
-        case tRBRACE:   
-            return NIL; // EOF
-        case tFUNCTION: 
-            return NIL; // EOF
-        case tKEYWORD:  
-            return NIL; // EOF
-        case tMESSAGE:  
-            return NIL; // EOF
-        case tADD:  
-            return NIL; // EOF
-        case tSUB:  
-            return NIL; // EOF
-        case tMUL:  
-            return NIL; // EOF
-        case tDIV:  
-            return NIL; // EOF
-        case tGREATER:  
-            return NIL; // EOF
-        case tLESS: 
-            return NIL; // EOF
-        case tEQUAL:    
-            return NIL; // EOF
-        case tDOT:  
-            return NIL; // EOF
-        case tHEX_INTEGER:  
-            return NIL; // EOF
-        case tFLOAT:    
-            // float f;
-            // sscanf(token, "%lf", &f);
-            // return INT2PTR(f); // EOF
-        case tCHRLIT:   
-            return NIL; // EOF
-        case tSTRLIT:   
-            return NIL; // EOF
+                        return l;
+                    } else if (tk == tDOT) {
+                        t->cons.cdr = parse(self);
+                        if (self->nextToken(self,&token) != tRBRACE) {
+                            lerror("Missing ')'");
+                        } else {
+                            return l;
+                        }
+                    } else if (tk == tEOF) {
+                        lerror("Malformed list!");
+                    } else {
+                        self->pushBack(self);
+                        t->cons.cdr = mkCons(parse(self), NIL);
+                        t = t->cons.cdr;
+                    } 
+                } // while
+            } // else
+     
         default:    
             return NIL; // EOF
+    } // switch
+}
+
+static Ptr readS(ParserPtr parser) {
+    int err = setjmp(ex_buf__);
+    if (err != 0) {
+        printf("ERR");
+        return NIL;
     }
+    return parse(parser);
 }
 
-static int readToken(ParserPtr parser, char** token)
-{
-    return parser->tokenizer->nextToken(parser->tokenizer, token);
+static int readToken(ParserPtr parser, char** token) {
+    if (parser->last) {
+        parser->last = 0;
+        *token = parser->lastTokenStr;
+        return parser->lastToken;
+    }
+    parser->lastToken = parser->tokenizer->nextToken(parser->tokenizer, &(parser->lastTokenStr));
+    *token = parser->lastTokenStr;
+    return parser->lastToken;
 }
 
-ParserPtr createParser(TokenizerPtr tokenizer)
-{
+static void pushBack(ParserPtr parser) {
+    parser->last = 1;
+}
+
+ParserPtr createParser(TokenizerPtr tokenizer) {
     ParserPtr parser = malloc(sizeof(Parser));
     parser->tokenizer = tokenizer;
-    parser->lastToken = NULL;
-    parser->lastTokenType = 0;
-    parser->read = parse;
-    parser->next = readToken;
+    parser->lastTokenStr = NULL;
+    parser->lastToken = 0;
+    parser->read = readS;
+    parser->nextToken = readToken;
+    parser->pushBack = pushBack;
     return parser;
 }
 
-void testReader(void)
-{
+void testReader(void) {
     printf("Lisp>");
 
-    char str[] = "42";
+    char str[] = "(42 (A B) 41)";
     TokenizerPtr tokenizer = tokenizer_string(str);
     ParserPtr parser = createParser(tokenizer);
 

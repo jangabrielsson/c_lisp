@@ -1,9 +1,11 @@
 typedef struct ParserStruct {
     Ptr (*read)(struct ParserStruct *parser);
-    int (*next)(struct ParserStruct *parser, char**token);
+    void (*pushBack)(struct ParserStruct *parser);
+    int (*nextToken)(struct ParserStruct *parser, char**token);
     TokenizerPtr tokenizer;
-    char *lastToken;
-    int lastTokenType;
+    int last;
+    char *lastTokenStr;
+    int lastToken;
 } Parser, *ParserPtr;
 
 void testReader(void);
