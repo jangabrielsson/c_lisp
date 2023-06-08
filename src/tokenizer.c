@@ -13,29 +13,29 @@ extern int yylex(void);
 extern char lexBuffer[];
 
 typedef struct TokenizerStruct {
-    int (*nextToken)(struct TokenizerStruct *tokenizer, char** buffer);
-    int (*readInput)(struct TokenizerStruct *currTokenizer, char* buffer, int maxBytesToRead);
+    int (*next_token)(struct TokenizerStruct *tokenizer, char** buffer);
+    int (*read_input)(struct TokenizerStruct *curr_tokenizer, char* buffer, int maxBytesToRead);
     YY_BUFFER_STATE buffer;
     int closed;
     FILE *fptr;
-    char *str;
+    const char *str;
     int n;
 } Tokenizer, *TokenizerPtr;
 
-int (*readHook)(TokenizerPtr self, char* buffer, int maxBytesToRead);
+int (*read_hook)(TokenizerPtr self, char* buffer, int maxBytesToRead);
 
-TokenizerPtr currTokenizer;
+TokenizerPtr curr_tokenizer;
 
 int readInputForLexer(char* buffer, size_t *numBytesRead, int maxBytesToRead)
 {
-    *numBytesRead = readHook(currTokenizer,buffer,maxBytesToRead);
+    *numBytesRead = read_hook(curr_tokenizer,buffer,maxBytesToRead);
     return 0;
 }
 
-static int stringReadHook(TokenizerPtr self, char* buffer, int maxBytesToRead)  
+static int string_read_hook(TokenizerPtr self, char* buffer, int maxBytesToRead)  
 {
     int i = 0;
-    char *str = self->str;
+    char *str = (char *)self->str;
     str = str+self->n;
     while (*str && i < maxBytesToRead) {
         buffer[i++] = *str++;
@@ -45,13 +45,13 @@ static int stringReadHook(TokenizerPtr self, char* buffer, int maxBytesToRead)
     return i;
 }
 
-static int stdinReadHook(TokenizerPtr self, char* buffer,int maxBytesToRead)  
+static int stdin_read_hook(TokenizerPtr self, char* buffer,int maxBytesToRead)  
 {
     *buffer = fgetc(stdin);
     return 1;
 }
 
-static int fileReadHook(TokenizerPtr self, char* buffer, int maxBytesToRead)
+static int file_read_hook(TokenizerPtr self, char* buffer, int maxBytesToRead)
 {
     if (self->fptr == 0) return 0;
     char *res = fgets(buffer, maxBytesToRead, self->fptr);
@@ -64,7 +64,7 @@ static int fileReadHook(TokenizerPtr self, char* buffer, int maxBytesToRead)
     return strlen(buffer);
 }
 
-void tokenizer_dispose(TokenizerPtr self)
+void dispose_tokenizer(TokenizerPtr self)
 {
     if (self->closed) return;
     self->closed = 1;
@@ -72,44 +72,44 @@ void tokenizer_dispose(TokenizerPtr self)
     free(self);
 }
 
-static int nextToken(TokenizerPtr self, char **token) // When last token is read the tkz ptr is deallocated(!!!)
+static int next_token(TokenizerPtr self, char **token) // When last token is read the tkz ptr is deallocated(!!!)
 {
     if (self->closed) return 0;
-    readHook = self->readInput;
+    read_hook = self->read_input;   // Ouch! how to make this thread safe? semaphores?
     yy_switch_to_buffer(self->buffer);
-    currTokenizer = self;
+    curr_tokenizer = self;
     int y = yylex();
     *token = lexBuffer;
     return y;
 }
 
-TokenizerPtr tokenizer_stdin(void)
+TokenizerPtr stdin_tokenizer(void)
 {
     TokenizerPtr tkz = malloc(sizeof(Tokenizer));
-    tkz->nextToken = nextToken;
-    tkz->readInput = stdinReadHook;
+    tkz->next_token = next_token;
+    tkz->read_input = stdin_read_hook;
     tkz->buffer = yy_create_buffer(0, 8192);
     return tkz;
 }
 
-TokenizerPtr tokenizer_file(char *fname)
+TokenizerPtr file_tokenizer(const char *fname)
 {
     FILE *fptr = fopen(fname, "r");
     if (fptr == 0L) return 0L;
     TokenizerPtr tkz = malloc(sizeof(Tokenizer));
-    tkz->nextToken = nextToken;
-    tkz->readInput = fileReadHook;
+    tkz->next_token = next_token;
+    tkz->read_input = file_read_hook;
     tkz->buffer = yy_create_buffer(0, 8192);
     tkz->closed = 0;
     tkz->fptr = fptr;
     return tkz;
 }
 
-TokenizerPtr tokenizer_string(char *str)
+TokenizerPtr string_tokenizer(const char *str)
 {
     TokenizerPtr tkz = malloc(sizeof(Tokenizer));
-    tkz->nextToken = nextToken;
-    tkz->readInput = stringReadHook;
+    tkz->next_token = next_token;
+    tkz->read_input = string_read_hook;
     tkz->buffer = yy_create_buffer(0, 8192);
     tkz->str = str;
     tkz->n = 0;

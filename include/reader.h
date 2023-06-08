@@ -1,12 +1,18 @@
 typedef struct ParserStruct {
     Ptr (*read)(struct ParserStruct *parser);
-    void (*pushBack)(struct ParserStruct *parser);
-    int (*nextToken)(struct ParserStruct *parser, char**token);
-    TokenizerPtr tokenizer;
+    LispPtr lisp;
+    void (*push_back)(struct ParserStruct *parser);
+    int (*next_token)(struct ParserStruct *parser, char**token);
+    void *tokenizer;
     int last;
-    char *lastTokenStr;
-    int lastToken;
+    char *last_token_str;
+    int last_token;
+    Ptr NIL;
+    Ptr T;
+    void *ex_buf;
 } Parser, *ParserPtr;
 
-void testReader(void);
-ParserPtr createParser(TokenizerPtr tokenizer);
+ParserPtr string_reader(LispPtr lisp, const char *str);
+ParserPtr stdin_reader(LispPtr lisp);
+ParserPtr file_reader(LispPtr lisp, const char *filename);
+void lisp_print(LispPtr lisp, Ptr e);

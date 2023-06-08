@@ -26,7 +26,7 @@ typedef struct Instr Instr;
 #define PUSH(V) stack[++stackPtr] = V
 #define POP() (stack[stackPtr--])
 #define CHECK_TYPE(P, T, M) ((((ulong)P) & (ulong)0x03) == (ulong)T) ? UNTAG(P) : (Ptr)lerror(M)
-#define CHECK_INT(P, M) ((((ulong)P) & (ulong)0x03) == (ulong)INT_TYPE) ? (((long)P) >> 2) : (long)lerror(M)
+#define CHECK_INT(P,M) ((((ulong)P) & (ulong)0x03) == (ulong)INT_TYPE) ? (((long)P) >> 2) : (long)lerror(M)
 
 #define PUSHINT(I)                     \
   {                                    \
@@ -40,9 +40,9 @@ typedef struct Instr Instr;
   {               \
     .op = OP_EXIT \
   }
-#define CALL(F)                       \
+#define CALL(L,F)                       \
   {                                   \
-    .op = OP_CALL, .value = intern(F) \
+    .op = OP_CALL, .value = make_atom(L,F,L->NIL) \
   }
 
-  Ptr runCode(Instr *code);
+  Ptr runCode(LispPtr lisp, Instr *code);

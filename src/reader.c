@@ -4,109 +4,158 @@
 #include <setjmp.h>
 
 #include "y.tab.h"
-#include "types.h"
+
+#include "clisp.h"
 #include "tokenizer.h"
 #include "reader.h"
 
 #define tEOF 0
 
-static jmp_buf ex_buf__;
-static Ptr lerror(char *m) {
-  printf("%s", m);
-  longjmp(ex_buf__, 42);
-  return NIL;
+static void lerror(ParserPtr self, int errcode) {
+  longjmp(*(jmp_buf *)(self->ex_buf), errcode);
 }
+
+enum err_codes {
+  ERR_EOF = 1,
+  ERR_MALFORMED_LIST,
+  ERR_MISSING_RBRACE,
+  ERR_UNKNOWN_TOKEN,
+};
+
+const char* err_strings[] = {
+    "___",
+    "end-of-file",
+    "malformed list",
+    "missing ')'",
+    "unknown token",
+};
 
 static Ptr parse(ParserPtr self) {   
     char *token;
-    int tokenType = self->nextToken(self, &token);
-    switch(tokenType) {
+    int token_type = self->next_token(self, &token);
+    switch(token_type) {
         case 0: 
-            return NIL; // ERRROR
+            lerror(self, ERR_EOF);
         case tINTEGER: {
             long n;
             sscanf(token, "%ld", &n);
             return INT2PTR(n); 
         }
         case tATOM: 
-            return mkAtom(token, NIL);
+            return make_atom(self->lisp, token, self->NIL);
         case tLBRACE:   
-            if (self->nextToken(self, &token) == tRBRACE) {
-                return NIL; 
+            if (self->next_token(self, &token) == tRBRACE) {
+                return self->NIL; 
             } else {
-                self->pushBack(self);
-                Ptr l = mkCons(parse(self), NIL);
+                self->push_back(self);
+                Ptr l = make_cons(self->lisp, parse(self), self->NIL);
                 Ptr t = l;
                 while (1) {
-                    int tk = self->nextToken(self,&token);
+                    int tk = self->next_token(self,&token);
                     if (tk == tRBRACE) {
                         return l;
                     } else if (tk == tDOT) {
                         t->cons.cdr = parse(self);
-                        if (self->nextToken(self,&token) != tRBRACE) {
-                            lerror("Missing ')'");
+                        if (self->next_token(self,&token) != tRBRACE) {
+                            lerror(self, ERR_MALFORMED_LIST);
                         } else {
                             return l;
                         }
                     } else if (tk == tEOF) {
-                        lerror("Malformed list!");
+                        lerror(self, ERR_MALFORMED_LIST);
                     } else {
-                        self->pushBack(self);
-                        t->cons.cdr = mkCons(parse(self), NIL);
+                        self->push_back(self);
+                        t->cons.cdr = make_cons(self->lisp, parse(self), self->NIL);
                         t = t->cons.cdr;
                     } 
                 } // while
             } // else
      
         default:    
-            return NIL; // EOF
+            lerror(self, ERR_UNKNOWN_TOKEN);
     } // switch
+    return self->NIL;
 }
 
-static Ptr readS(ParserPtr parser) {
-    int err = setjmp(ex_buf__);
+static Ptr read_s(ParserPtr self, int *read_error) {
+    jmp_buf ex_buf;
+    self->ex_buf = (void *)&ex_buf;
+    int err = setjmp(ex_buf);
+    *read_error = 0;
     if (err != 0) {
-        printf("ERR");
-        return NIL;
+        printf("Reader error: %s\n", err_strings[err]);
+        if (err == ERR_UNKNOWN_TOKEN) {
+            printf("Unknown token: %s\n", self->last_token_str);    
+        }
+        *read_error = err;
+        return self->NIL;
     }
-    return parse(parser);
+    return parse(self);
 }
 
-static int readToken(ParserPtr parser, char** token) {
-    if (parser->last) {
-        parser->last = 0;
-        *token = parser->lastTokenStr;
-        return parser->lastToken;
+static int read_token(ParserPtr self, char** token) {
+    if (self->last) {
+        self->last = 0;
+        *token = self->last_token_str;
+        return self->last_token;
     }
-    parser->lastToken = parser->tokenizer->nextToken(parser->tokenizer, &(parser->lastTokenStr));
-    *token = parser->lastTokenStr;
-    return parser->lastToken;
+    TokenizerPtr tp = (TokenizerPtr)self->tokenizer;
+    self->last_token = tp->next_token(tp, &(self->last_token_str));
+    *token = self->last_token_str;
+    return self->last_token;
 }
 
-static void pushBack(ParserPtr parser) {
-    parser->last = 1;
+static void push_back(ParserPtr self) {
+    self->last = 1;
 }
 
-ParserPtr createParser(TokenizerPtr tokenizer) {
+static ParserPtr create_parser(LispPtr lisp, TokenizerPtr tokenizer) {
     ParserPtr parser = malloc(sizeof(Parser));
+    parser->lisp = lisp;
+    parser->NIL = lisp->NIL;
+    parser->T = lisp->T;
     parser->tokenizer = tokenizer;
-    parser->lastTokenStr = NULL;
-    parser->lastToken = 0;
-    parser->read = readS;
-    parser->nextToken = readToken;
-    parser->pushBack = pushBack;
+    parser->last_token_str = NULL;
+    parser->last_token = 0;
+    parser->read = read_s;
+    parser->next_token = read_token;
+    parser->push_back = push_back;
     return parser;
 }
 
-void testReader(void) {
-    printf("Lisp>");
-
-    char str[] = "(42 (A B) 41)";
-    TokenizerPtr tokenizer = tokenizer_string(str);
-    ParserPtr parser = createParser(tokenizer);
-
-    Ptr p = parser->read(parser);
-    printf("read: %s -> ", str);
-    lisp_print(p);
-    printf("\n");
+ParserPtr string_reader(LispPtr lisp, const char *str) {
+    TokenizerPtr tokenizer = string_tokenizer(str);
+    return create_parser(lisp, tokenizer);
 }
+
+ParserPtr stdin_reader(LispPtr lisp) {
+    TokenizerPtr tokenizer = stdin_tokenizer();
+    return create_parser(lisp, tokenizer);
+}
+
+ParserPtr file_reader(LispPtr lisp, const char *filename) {
+    TokenizerPtr tokenizer = file_tokenizer(filename);
+    return create_parser(lisp, tokenizer);
+}
+
+void lisp_print(LispPtr lisp, Ptr e) {
+  if (TYPE(e) == ATOM_TYPE) {
+    printf("%s", UNTAG(e)->atom.name);
+  }
+  else if (TYPE(e) == CONS_TYPE) {
+    printf("(");
+    while (TYPE(e) == CONS_TYPE) {
+      lisp_print(lisp, UNTAG(e)->cons.car);
+      e = UNTAG(e)->cons.cdr;
+      if (TYPE(e) == CONS_TYPE) printf(" ");
+    }
+    if (e != lisp->NIL) {
+      printf(" . ");
+      lisp_print(lisp, e);
+    }
+    printf(")");
+  } else if (TYPE(e) == INT_TYPE) {
+    printf("%ld", (long)e >> 2);
+  }
+}
+

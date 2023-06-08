@@ -1,8 +1,8 @@
 typedef struct TokenizerStruct {
-    int (*nextToken)(struct TokenizerStruct *self, char** buffer);
+    int (*next_token)(struct TokenizerStruct *self, char** buffer);
 } *TokenizerPtr;
 
-TokenizerPtr tokenizer_stdin(void);
-TokenizerPtr tokenizer_file(char *fname);
-TokenizerPtr tokenizer_string(char *str);
-TokenizerPtr tokenizer_dispose(TokenizerPtr self);
+TokenizerPtr stdin_tokenizer(void);
+TokenizerPtr file_tokenizer(const char *fname);
+TokenizerPtr string_tokenizer(const char *str);
+TokenizerPtr dispose_tokenizer(TokenizerPtr self);
