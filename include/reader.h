@@ -1,5 +1,5 @@
 typedef struct ParserStruct {
-    Ptr (*read)(struct ParserStruct *parser);
+    Ptr (*read)(struct ParserStruct *parser,int *err_code);
     LispPtr lisp;
     void (*push_back)(struct ParserStruct *parser);
     int (*next_token)(struct ParserStruct *parser, char**token);

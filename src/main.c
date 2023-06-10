@@ -8,12 +8,12 @@
 
 static void read_print_loop(LispPtr lisp) {
   while (TRUE) {
+    printf("\n"); gc_info(lisp);
     printf("\nLisp>");
     Ptr exit = make_atom(lisp,"EXIT",lisp->NIL);
     Ptr expr = lisp->read_stdin(lisp);
-    if (lisp->read_error) {
-      printf("Error: %s\n", lisp->read_error);
-      lisp->read_error = NULL;
+    if (ERROR(lisp)) {
+      printf("Error: %s\n", lisp->error_string);
       continue;
     }
     if (expr == exit) break;

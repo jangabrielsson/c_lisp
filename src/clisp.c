@@ -6,7 +6,9 @@
 #include "reader.h"
 
 #define VERSION "0.1"
-#define MEM_SIZE 4096
+#define MEM_BLOCK_SIZE 4096
+
+static size_t mem_size = MEM_BLOCK_SIZE;
 
 static void print_greeting(LispPtr lisp) {
     printf("Welcome to CLisp! v%s\n",lisp->version);
@@ -56,8 +58,17 @@ static Ptr _print(LispPtr lisp, Ptr *stack) {
   return stack[0];
 }
 
+static Ptr alloc_block(LispPtr lisp, size_t size) {
+    Ptr p = (Ptr)malloc(size*sizeof(Ptr));
+    if (p == 0) {
+        lisp->error = 1;
+        strcpy(lisp->error_string, "Out of memory");
+    }
+    return p;
+}
+
 static void init_mem(LispPtr lisp) {
-    lisp->heap = (Ptr *)malloc(MEM_SIZE);
+    lisp->heap = (Ptr *)malloc(mem_size);
     lisp->heap_ptr = 0;
     lisp->hash = (void *)g_hash_table_new(g_str_hash, g_str_equal);
 }
@@ -65,7 +76,7 @@ static void init_mem(LispPtr lisp) {
 static ParserPtr pin = 0L;
 static Ptr lisp_stdin_reader(LispPtr lisp) {
     if (pin == 0) pin = stdin_reader(lisp);
-    return pin->read(pin,&lisp->read_error);
+    return pin->read(pin,&lisp->error);
 }
 
 LispPtr create_lisp() {
@@ -94,4 +105,9 @@ void dispose_lisp(LispPtr lisp) {
     free(lisp->heap);
     g_hash_table_destroy((GHashTable *)lisp->hash);
     free(lisp);
+}
+
+void gc_info(LispPtr lisp) {
+    printf("Heap size: %ld\n", mem_size);
+    printf("Heap used: %d\n", lisp->heap_ptr);
 }

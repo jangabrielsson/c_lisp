@@ -9,8 +9,12 @@ BIN     := bin
 SRC     := src
 INCLUDE := include
 
-INC =-I/opt/homebrew/Cellar/glib/2.76.3/include/glib-2.0 -I/opt/homebrew/Cellar/glib/2.76.3/lib/glib-2.0/include -I/opt/homebrew/opt/gettext/include -I/opt/homebrew/Cellar/pcre2/10.42/include
-LIB = -L/opt/homebrew/Cellar/glib/2.76.3/lib -L/opt/homebrew/opt/gettext/lib -lglib-2.0 -lintl
+GLIB    := /opt/homebrew/Cellar/glib/2.76.3
+GTEXT   := /opt/homebrew/opt/gettext
+PCRE    := /opt/homebrew/Cellar/pcre2/10.42
+
+INC =-I$(GLIB)/include/glib-2.0 -I$(GLIB)/lib/glib-2.0/include -I$(GTEXT)/include -I$(PCRE)/include
+LIB = -L$(GLIB)/lib -L$(GTEXT)/lib -lglib-2.0 -lintl
 
 LIBRARIES   :=
 EXECUTABLE  := main
@@ -26,4 +30,4 @@ $(BIN)/$(EXECUTABLE): $(SRC)/*.c
 	$(CXX) $(CXX_FLAGS) -I$(INCLUDE) $(INC) $^ -o $@ $(LIBRARIES) $(LIB)
 
 clean:
-	-rm $(BIN)/*
+	-rm -r $(BIN)/*

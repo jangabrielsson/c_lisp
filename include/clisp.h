@@ -1,6 +1,8 @@
 typedef unsigned long ulong;
 typedef unsigned int uint;
 
+#define ERROR(lisp) (lisp->error != 0)
+
 union Expr;
 typedef union Expr Expr;
 typedef Expr *Ptr;
@@ -25,8 +27,9 @@ typedef struct LispStruct {
     void (* print_greeting)(struct LispStruct *lisp);
     void (* print_architecture)(struct LispStruct *lisp);
 
-    int read_error;
-    
+    int error;
+    char error_string[256];
+
     Ptr NIL;
     Ptr T;
 } Lisp, *LispPtr;
@@ -74,3 +77,4 @@ Ptr make_atom(LispPtr lisp, char *name, Ptr value);
 
 LispPtr create_lisp(void);
 void dispose_lisp(LispPtr lisp);
+void gc_info(LispPtr lisp);

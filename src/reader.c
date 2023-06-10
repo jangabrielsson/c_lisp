@@ -83,10 +83,11 @@ static Ptr read_s(ParserPtr self, int *read_error) {
     int err = setjmp(ex_buf);
     *read_error = 0;
     if (err != 0) {
-        printf("Reader error: %s\n", err_strings[err]);
+        char err_arg[80] = "";
         if (err == ERR_UNKNOWN_TOKEN) {
-            printf("Unknown token: %s\n", self->last_token_str);    
+            snprintf(err_arg,sizeof(err_arg)," - token: %s\n", self->last_token_str);    
         }
+        snprintf(self->lisp->error_string,sizeof(self->lisp->error_string),"Reader error: %s %s\n", err_strings[err],err_arg);
         *read_error = err;
         return self->NIL;
     }
